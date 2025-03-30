@@ -2,12 +2,12 @@
 
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';  // 替换 next/navigation
+import { useRouter } from 'next/navigation';  // 使用Next.js的导航，替换React Router
 import ChatBox from './chatbox';
 
 
 var flag = 0;
-let globalChatHistory: Array<{ role: string; content: string; }> = [];
+let globalChatHistory: Array<{ role: string; content: string; name?: string; }> = [];
 let globalDialogueCount = 0;  // 添加全局对话计数
 let isPause = false;  // 添加暂停状态全局变量
 let breakPoint: 'teacher' | 'student' | null = null;  // 添加断点全局变量
@@ -82,8 +82,7 @@ const dialogues = {
 
 
 const TeachingMock = () => {
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const router = useRouter();  // 使用Next.js的router
   const [isClassStarted, setIsClassStarted] = useState(true);
   const [selectedTeachingStyle, setSelectedTeachingStyle] = useState('encouraging');
   const [selectedStudents, setSelectedStudents] = useState(['active', 'thoughtful', 'shy']);
@@ -126,7 +125,7 @@ const TeachingMock = () => {
     setProgress(0);
     setDialogueCount(0);
     setElapsedTime(0);
-    navigate('/');
+    router.push('/');  // 使用Next.js的路由
   };
 
   const handleStartClass = () => {
@@ -160,21 +159,73 @@ const TeachingMock = () => {
       if (globalChatHistory.length === 0) {
         globalChatHistory.push({
           role: 'system',
-          content: `这是一节${teachingStyles.find(style => style.id === selectedTeachingStyle)?.name}风格的课程开始，请以老师的身份开始上课。`
+          content: `这是一节${teachingStyles.find(style => style.id === selectedTeachingStyle)?.name}风格的课程开始，请以老师的身份开始上课，使用Markdown格式来强调重要内容。`
+        });
+        
+        // 添加一条包含Markdown的初始老师消息，用于测试
+        setMessages([{
+          sender: 'teacher',
+          content: `# 欢迎来到我们的数学课！
+
+今天我们将学习以下内容：
+
+1. **代数基础** - 解一元二次方程
+2. *微积分入门* - 导数的概念与应用
+3. 几何证明
+
+请看这个公式示例：
+
+\`\`\`
+f(x) = ax² + bx + c
+\`\`\`
+
+> 记住：学习数学的关键是理解概念，而不仅仅是记忆公式。
+
+你有什么问题吗？`
+        }]);
+        
+        globalChatHistory.push({
+          role: 'assistant',
+          content: `# 欢迎来到我们的数学课！
+
+今天我们将学习以下内容：
+
+1. **代数基础** - 解一元二次方程
+2. *微积分入门* - 导数的概念与应用
+3. 几何证明
+
+请看这个公式示例：
+
+\`\`\`
+f(x) = ax² + bx + c
+\`\`\`
+
+> 记住：学习数学的关键是理解概念，而不仅仅是记忆公式。
+
+你有什么问题吗？`,
+          name: 'teacher'
         });
       }
   
       // 老师发言前检查断点
       if (breakPoint !== 'student') {
         setIsTeacherThinking(true);
+        // 创建一个专门用于老师角色的历史记录副本
+        const teacherHistory = globalChatHistory.map(msg => {
+          // 将user角色标记为学生消息，assistant角色标记为老师消息
+          if (msg.role === 'user') return { ...msg, role: 'user', name: 'student' };
+          if (msg.role === 'assistant') return { ...msg, role: 'assistant', name: 'teacher' };
+          return msg;
+        });
+        
         const teacherResponse = await fetch('http://localhost:8000/api/chat-stream', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            history: globalChatHistory,  // 使用全局历史记录
-            role: "老师",
+            history: teacherHistory,
+            role: "teacher",
             student_type: null
           })
         });
@@ -193,13 +244,19 @@ const TeachingMock = () => {
             if (chunk) {
               teacherMessage += chunk;
               setMessages(prev => {
-                const lastMessage = prev[prev.length - 1];
-                if (lastMessage?.sender === 'teacher') {
-                  return [...prev.slice(0, -1), {
+                // 查找最后一条老师消息
+                const lastTeacherIndex = [...prev].reverse().findIndex(msg => msg.sender === 'teacher');
+                
+                if (lastTeacherIndex >= 0 && prev.length - 1 - lastTeacherIndex === prev.length - 1) {
+                  // 如果最后一条消息就是老师的，只更新内容
+                  const newMessages = [...prev];
+                  newMessages[prev.length - 1] = {
                     sender: 'teacher',
                     content: teacherMessage
-                  }];
+                  };
+                  return newMessages;
                 } else {
+                  // 否则添加新消息
                   return [...prev, {
                     sender: 'teacher',
                     content: teacherMessage
@@ -210,23 +267,34 @@ const TeachingMock = () => {
           }
         }
         setIsTeacherThinking(false);
+        // 使用明确的标记将老师回复添加到历史记录
         globalChatHistory.push({
           role: 'assistant',
-          content: teacherMessage
+          content: teacherMessage,
+          name: 'teacher'  // 明确标记这是老师的消息
         });
   
         console.log('学生发言前的历史记录:', globalChatHistory);
         
         // 学生回应
         setIsStudentThinking(true);
+        
+        // 创建一个专门用于学生角色的历史记录副本
+        const studentHistory = globalChatHistory.map(msg => {
+          // 将user角色标记为学生消息，assistant角色标记为老师消息
+          if (msg.role === 'user') return { ...msg, role: 'user', name: 'student' };
+          if (msg.role === 'assistant') return { ...msg, role: 'assistant', name: 'teacher' };
+          return msg;
+        });
+        
         const studentResponse = await fetch('http://localhost:8000/api/chat-stream', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            history: globalChatHistory,
-            role: "学生",
+            history: studentHistory,
+            role: "student",
             student_type: selectedStudents[0]
           })
         });
@@ -245,13 +313,19 @@ const TeachingMock = () => {
             if (chunk) {
               studentMessage += chunk;
               setMessages(prev => {
-                const lastMessage = prev[prev.length - 1];
-                if (lastMessage?.sender === 'student1') {
-                  return [...prev.slice(0, -1), {
+                // 查找最后一条学生消息
+                const lastStudentIndex = [...prev].reverse().findIndex(msg => msg.sender === 'student1');
+                
+                if (lastStudentIndex >= 0 && prev.length - 1 - lastStudentIndex === prev.length - 1) {
+                  // 如果最后一条消息就是学生的，只更新内容
+                  const newMessages = [...prev];
+                  newMessages[prev.length - 1] = {
                     sender: 'student1',
                     content: studentMessage
-                  }];
+                  };
+                  return newMessages;
                 } else {
+                  // 否则添加新消息
                   return [...prev, {
                     sender: 'student1',
                     content: studentMessage
@@ -262,21 +336,11 @@ const TeachingMock = () => {
           }
         }
         setIsStudentThinking(false);
+        // 使用明确的标记将学生回复添加到历史记录
         globalChatHistory.push({
           role: 'user',
-          content: studentMessage
-        });
-  
-        // 更新最终的消息状态，确保包含完整的对话历史
-        setMessages(prev => {
-          const lastMessage = prev[prev.length - 1];
-          if (lastMessage?.sender === 'student1' && lastMessage.content === studentMessage) {
-            return prev;
-          }
-          return [...prev, {
-            sender: 'student1',
-            content: studentMessage
-          }];
+          content: studentMessage,
+          name: 'student'  // 明确标记这是学生的消息
         });
   
         // 更新对话计数和进度

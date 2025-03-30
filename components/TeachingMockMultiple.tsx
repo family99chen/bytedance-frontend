@@ -174,7 +174,7 @@ const TeachingMock = () => {
           },
           body: JSON.stringify({
             history: globalChatHistory,  // 使用全局历史记录
-            role: "老师",
+            role: "teacher",
             student_type: null
           })
         });
@@ -226,7 +226,7 @@ const TeachingMock = () => {
           },
           body: JSON.stringify({
             history: globalChatHistory,
-            role: "学生",
+            role: "student",
             student_type: selectedStudents[0]
           })
         });

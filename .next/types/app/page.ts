@@ -1,4 +1,4 @@
-// File: C:\Users\陈臻\Desktop\项目\teaching_mock\app\page.tsx
+// File: /Users/xiexiaohao/Downloads/Project_2025/bytedance-frontend/app/page.tsx
 import * as entry from '../../../app/page.js'
 import type { ResolvingMetadata } from 'next/dist/lib/metadata/types/metadata-interface.js'
 

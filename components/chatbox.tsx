@@ -1,5 +1,7 @@
 import { motion } from 'framer-motion';
 import { useRef, useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   sender: 'teacher' | 'student1' | 'student2' | 'student3' | 'student4';
@@ -75,11 +77,13 @@ const ChatBox = ({ messages }: ChatBoxProps) => {
                   : 'bg-purple-500/5'
               } rounded-2xl`}
             >
-              <p className="text-white/90">
-                {message.content}
+              <div className="text-white/90 markdown-content prose prose-invert prose-sm max-w-none prose-cyan">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {message.content}
+                </ReactMarkdown>
                 {/* 添加打字机效果的光标 */}
                 <span className="inline-block w-2 h-4 ml-1 bg-cyan-500/50 animate-pulse" />
-              </p>
+              </div>
             </div>
             {message.sender !== 'teacher' && (
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 p-0.5 flex-shrink-0">
